@@ -1,0 +1,60 @@
+# Tileable texture generation — PIXEL SPACE, fused-attention backend.
+#
+# Same as pixel_exact.yaml except image_denoiser.patch_denoiser.type: "exact_flash_attn".
+# Same computation without the N×N score matrix; needs an Ampere or newer GPU. See
+# "Making it fast" in the README for when it is also faster.
+seed: 0
+num_samples: 1
+
+# Input and output
+image_path: ???
+final_output_path: null
+preview_long_side: null
+input_resize_to: null
+output_size: null
+
+# Tileable-specific
+tiling:
+  direction: "both"      # "horizontal", "vertical", or "both"
+  num_shifts: 4          # 4 = horiz + vert + diagonal + center. The diagonal shift is what puts
+                         # the four corners at the image center, where the denoiser is most
+                         # accurate; with 3 shifts the corners are only covered by the horizontal
+                         # shift's mask and come out weaker.
+                         # The paper's results used num_shifts=3; set it to 3 to reproduce them.
+  periodic_decode: true  # only used when latent.enabled — see configs/tileable/latent_exact.yaml
+
+# Latent-space acceleration -- disabled here. Do not just flip it on: patch_size and num_scales
+# below are tuned for pixel space. From ~512px up, use configs/tileable/latent_exact.yaml, which
+# also turns on the periodic decoder that keeps the tile seamless through the VAE.
+latent:
+  enabled: false
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: auto          # or an integer to pick the depth yourself
+  min_short_side: 30        # the coarsest scale's short side; 2.0x patch_size
+
+image_denoiser:
+  patch_size: 15
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "exact_flash_attn"
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 25    # quality/speed trade-off; 10-50 all give reasonable results, cost scales with steps
+  sigma_min: 1e-4
+  eta: 1.0         # try anywhere in 0.0-1.0; 1.0 is slightly better, 0.0 samples deterministically
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

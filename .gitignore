@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.vscode/
+
+# Outputs
+outputs/
+
+# The full research datasets: fetched by datasets/download_data.py, never committed. The small
+# example images the README's Quickstart uses live in examples/ instead.
+datasets/*
+!datasets/*.py
+!datasets/*.md

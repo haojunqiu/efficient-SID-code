@@ -1,0 +1,50 @@
+# Unconditional generation — LATENT preset (large / megapixel inputs; FLUX VAE, 8x downsample per dim).
+# patch 7 / min_short_side 14 / 50 steps / uniform fold — see configs/symmetric/latent_exact.yaml
+# for why these differ from the pixel defaults. Exact denoiser: in latent the dataset is small,
+# so ANN does not pay off.
+#
+# For what a knob means, start at UncondAppConfig (efficient_sid/config.py):
+# it declares the top-level knobs and names the class behind each group.
+seed: 10
+num_samples: 1
+
+# Input and output
+image_path: ???          # required: path to input image
+final_output_path: null   # optional: where to save result
+preview_long_side: null
+input_resize_to: null     # e.g. "(1024, 1024)" or null
+output_size: null   # <-- in pixels, not in latent space
+
+# Latent-space acceleration (optional, requires FLUX VAE)
+latent:
+  enabled: true
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: auto          # or an integer to pick the depth yourself
+  min_short_side: 14        # the coarsest latent scale's short side; 2.0x patch_size
+
+image_denoiser:
+  patch_size: 7
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: .inf
+  patch_denoiser:
+    type: "exact"
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 20            # T=20 for the latent uncond preset
+  sigma_min: 1e-4
+  eta: 1.0
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

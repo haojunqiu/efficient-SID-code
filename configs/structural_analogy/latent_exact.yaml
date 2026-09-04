@@ -1,0 +1,75 @@
+# Structural analogy (image-based style transfer) — LATENT SPACE (FLUX VAE).
+#
+# WHEN TO USE: inputs from ~512px up. The VAE downsamples 8x per dim, so exact runs in seconds
+# on the latent, where pixel space OOMs outright -- no ANN needed.
+#
+# Style and structure are both resized to a fixed output_short_side, so a patch covers the same
+# fraction of every image and one setting behaves consistently across pairs, rather than varying
+# with each file's native size. num_scales=2 spends most steps at the coarse scale (where the
+# style transfer happens) and a few at full resolution to restore fine texture.
+#
+# The knobs: num_scales, patch_size (how local the style patches are) and noise_level (how closely
+# the result adheres to the content). See each field below for values to try.
+#
+# For what a knob means, start at StructuralAnalogyAppConfig (efficient_sid/config.py):
+# it declares the top-level knobs and names the class behind each group.
+seed: 1023
+num_samples: 1
+
+# Input and output
+style_image_path: ???
+structure_image_path: ???
+final_output_path: null
+preview_long_side: null
+
+# Structural-analogy specific
+output_short_side: 1024   # short side (px, in image space) the output is generated at; its aspect
+                          # ratio is always the *structure*'s, so the output resolution is derived,
+                          # not the structure's native size. Both images are resized to this short
+                          # side, each keeping its own aspect. Changing this value is not
+                          # recommended: patch_size and num_scales are tuned for it, so they would
+                          # need re-tuning too.
+                          # null = use the style's short side, which makes the working resolution
+                          # vary per pair (not recommended).
+noise_level: 0.2   # how far to invert the structure image: how much of the noisy image is
+                   # noise, from 0 to 1, and exactly sigma under flow_linear. Lower stays
+                   # closer to the structure; 0.2 to 1.0 is the useful range.
+
+# Latent-space acceleration
+latent:
+  enabled: true
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: 2      # try 1 or 2; the latent is already 8x smaller, so it stays low. Pass a
+                     # matching-length num_steps if you change this.
+  min_short_side: null
+
+# Small patch for the small latent; latent uses exact -- no ANN needed.
+image_denoiser:
+  patch_size: 3       # how local the style patches are: larger copies bigger patches of the
+                      # style. Try 3, 5 or 7.
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "exact"
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1
+
+scheduler:
+  type: "flow_linear"
+  num_steps: [10, 50]   # per-scale, finest -> coarsest. The coarsest scale drives the style
+                        # transfer and gets the most steps; finer scales only refine. Use
+                        # [50] if num_scales=1.
+  sigma_min: 1e-2   # not the usual 1e-4: a stronger warm-up step for inversion
+  eta: 0.0
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

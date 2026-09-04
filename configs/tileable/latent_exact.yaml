@@ -1,0 +1,66 @@
+# Tileable generation — LATENT preset (for large / megapixel inputs).
+#
+# WHEN TO USE: inputs from ~512px up. The VAE downsamples 8x per dim, so exact runs in seconds
+# on the latent, where pixel space OOMs outright.
+#
+# Why these defaults differ from the pixel preset:
+#   patch_size: 7    latents are ~8x smaller per dim, so the pixel-space 15 is far too large.
+#   min_short_side: 14   the coarsest scale's short side; num_scales follows from the input
+#                    to reach it.
+#   num_steps: 50    looked better than 25 here.
+#   fold_rho: .inf   uniform fold weights.
+#   image_denoiser.patch_denoiser.type: "exact"  -- not ann: the latent dataset is small enough
+#                    that exact / exact_flash_attn is fast enough for megapixel images.
+#
+# For what a knob means, start at TileableAppConfig (efficient_sid/config.py):
+# it declares the top-level knobs and names the class behind each group.
+seed: 0
+num_samples: 1
+
+# Input and output
+image_path: ???
+final_output_path: null
+preview_long_side: null
+input_resize_to: null
+output_size: null   # <-- in pixels, not in latent space
+
+# Tileable-specific
+tiling:
+  direction: "both"
+  num_shifts: 4          # 4 = horiz + vert + diagonal + center. DIFFERS FROM THE PAPER, which
+                         # used 3 -- see pixel_exact.yaml.
+  periodic_decode: true  # keep on: without it the decode puts a seam back at the tile boundary
+
+# Latent-space acceleration
+latent:
+  enabled: true
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: auto          # or an integer to pick the depth yourself
+  min_short_side: 14        # the coarsest latent scale's short side; 2.0x patch_size
+
+image_denoiser:
+  patch_size: 7
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: .inf
+  patch_denoiser:
+    type: "exact"
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 50
+  sigma_min: 1e-4
+  eta: 1.0
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

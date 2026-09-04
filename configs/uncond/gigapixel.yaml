@@ -1,0 +1,76 @@
+# Gigapixel — unconditional generation on multi-megapixel .. gigapixel inputs. One shared config; the
+# three paper examples (moon / tokyo / painting) are thin CLI overrides on top of it -- see the
+# Gigapixel section of README.md.
+#
+# WHEN TO USE: multi-megapixel .. gigapixel inputs on a 96 GB RTX 6000 PRO. Latent-space (FLUX VAE,
+# 8x-per-dim). The size-driven params (num_scales, denoiser_type, query_stride, query_chunks) are
+# derived from the input by build.resolve, so a new image needs no hand-tuned per-scale lists.
+#
+# QUALITY KNOBS -- worth trying per input:
+#   eta        0.0 favors local texture / fine detail (best for organic, cratered inputs like the
+#              moon); 1.0 (default) favors global coherence.
+#   fold_rho explore [0.2 .. inf]; 0.2 (default) keeps more fine detail, larger leans to coherence.
+# Per-example -- the README's gigapixel commands override these ------------------------------------
+#
+# For what a knob means, start at UncondAppConfig (efficient_sid/config.py):
+# it declares the top-level knobs and names the class behind each group.
+seed: 10                  # any seed is a valid sample; 10 is the shipped default (vary to explore)
+num_samples: 1
+
+# Input and output
+image_path: datasets/uncond/gigapixel/moon.jpg
+final_output_path: null
+preview_long_side: 2048   # also write <name>_preview.jpg at this long side (null = off)
+input_resize_to: null
+output_size: null   # in pixels, not in latent space; null = native. A retarget (e.g. "(18192, 54576)") widens it
+
+# Auto thresholds -- the cutoffs behind the "auto" values below
+auto:
+  denoiser_type_patch_threshold: 250000   # dict-patch count above which a scale uses ANN (~500x500 latent)
+  query_stride_patch_threshold: 8000000   # query-grid size above which a scale is strided 2x (finest only here)
+  query_grid_per_chunk: 7500              # grid positions per chunk (before stride); equals real patches
+                                          # per chunk only where stride=1 -- a strided scale runs
+                                          # ~this/stride^2. The two query_* knobs are tuned for 96 GB
+                                          # (patch 7, latent bf16); re-tune per GPU.
+
+# Latent-space acceleration
+latent:
+  enabled: true
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: auto          # pyramid depth that lands the coarsest on min_short_side, from the input's latent size
+  min_short_side: 12        # the coarsest latent scale's short side; ~1.5-2x patch_size
+
+image_denoiser:
+  patch_size: 7
+  dataset_stride: 1
+  query_stride: auto        # 2 on scales whose query grid > query_stride_patch_threshold, else 1 (finest only here)
+  fold_rho: 0.2           # see QUALITY KNOBS; explore [0.2 .. inf]
+  patch_denoiser:
+    type: auto       # ann where a scale's dataset > denoiser_type_patch_threshold, else exact_flash_attn
+    bottleneck_dtype: "bfloat16"
+    query_chunks: auto        # tiled to ~query_grid_per_chunk positions per chunk (VRAM only)
+    # Read only on scales resolved to "ann" / "ann_flash_attn"; exact scales ignore them.
+    # (ivfpq: product-quantized, bounded memory on the huge fine-scale datasets)
+    k: 5
+    index_type: "ivfpq"
+    nlist: null
+    nprobe: 40              # inverted-file lists probed per query; higher is more accurate and slower.
+                            # The README's gigapixel commands set it per example (painting uses 20).
+    pq_m: 28
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 20
+  sigma_min: 1e-4
+  eta: 1.0                  # see QUALITY KNOBS (moon uses 0.0)
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

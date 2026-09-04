@@ -1,0 +1,36 @@
+# Reproducible environment for efficient-sid.
+#
+#   conda env create -f environment.yml
+#   conda activate efficient-sid
+#   pip install -e .
+#
+# These are the exact versions the project is developed and tested against. conda provides
+# Python and faiss-gpu (the pytorch-channel build, not reliably pip-installable); everything else
+# comes from pip, PyTorch included, since the pytorch conda channel no longer publishes current
+# releases. Use a recent conda or Miniforge: the classic solver of conda 4.x is very slow here.
+name: efficient-sid
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - setuptools<80              # clip-anytorch still imports pkg_resources, removed in setuptools 80
+  # Approximate nearest-neighbour denoiser (image_denoiser.patch_denoiser.type: "ann" / "ann_flash_attn")
+  - pytorch::faiss-gpu=1.9.0=*cuda12.1.1   # the CUDA 12 build; the channel's default is CUDA 11.4
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu129
+      # Core
+      - torch==2.8.0
+      - torchvision==0.23.0
+      - numpy==1.26.4
+      - pillow==11.1.0
+      - pyyaml==6.0.2
+      - omegaconf==2.3.0
+      # Latent-space acceleration (latent.enabled: true) -- FLUX VAE
+      - diffusers==0.35.1
+      - transformers==4.53.2
+      - accelerate==1.9.0
+      # CLIP-guided text-driven style transfer (applications/text_style.py)
+      - clip-anytorch==2.6.0

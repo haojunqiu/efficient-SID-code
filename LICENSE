@@ -1,0 +1,44 @@
+MIT License
+
+Copyright (c) 2026 Haojun Qiu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+THIRD-PARTY CODE
+
+This project vendors code from the following MIT-licensed projects. Their copyright
+notices and permission terms are reproduced here as required by their licenses.
+
+1. ResizeRight -- https://github.com/assafshocher/ResizeRight
+   Copyright (c) 2020 Assaf Shocher
+   Vendored in: efficient_sid/pyramid.py (the resize / interpolation kernels used to
+   build the Gaussian and Laplacian image pyramids).
+
+2. Text2LIVE -- https://github.com/omerbt/Text2LIVE
+   Copyright (c) 2022 Omer Bar-Tal
+   Vendored in: efficient_sid/clip_guidance.py (the augmented CLIP image/text embedding
+   extractor, prompt templates, and cosine loss). The positional-embedding interpolation
+   there follows DINO (https://github.com/facebookresearch/dino, Apache-2.0).
+
+Both are distributed under the MIT License, whose terms are identical to those stated
+above: permission is granted free of charge to any person obtaining a copy of the
+software to deal in it without restriction, provided the copyright notice and permission
+notice are included, and the software is provided "AS IS", without warranty of any kind.

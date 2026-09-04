@@ -1,0 +1,60 @@
+# Tileable texture generation — PIXEL SPACE, approximate k-NN backend (FAISS).
+#
+# Same as pixel_exact.yaml except image_denoiser.patch_denoiser.type: "ann" and the ANN block (k, index_type, nlist, nprobe, pq_m).
+# O(N^1.5) against exact's O(N^2); tileable denoises four shifted views per step, so the
+# one-time index build amortizes well here. Requires faiss-gpu.
+seed: 0
+num_samples: 1
+
+# Input and output
+image_path: ???
+final_output_path: null
+preview_long_side: null
+input_resize_to: null
+output_size: null
+
+# Tileable-specific
+tiling:
+  direction: "both"      # "horizontal", "vertical", or "both"
+  num_shifts: 4          # 4 = horiz + vert + diagonal + center (paper used 3 — see pixel.yaml)
+  periodic_decode: true
+
+# Latent-space acceleration (see configs/tileable/pixel_exact_flash_attn.yaml for the
+# periodic-decode caveat)
+latent:
+  enabled: false
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: auto          # or an integer to pick the depth yourself
+  min_short_side: 30        # the coarsest scale's short side; 2.0x patch_size
+
+image_denoiser:
+  patch_size: 15
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "ann"    # <-- the only difference from configs/tileable/pixel_exact_flash_attn.yaml
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1
+    k: 5
+    index_type: "ivf"
+    nlist: null
+    nprobe: 2
+    pq_m: 16                # only used when index_type is "ivfpq"
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 25    # quality/speed trade-off; 10-50 all give reasonable results, cost scales with steps
+  sigma_min: 1e-4
+  eta: 1.0         # try anywhere in 0.0-1.0; 1.0 is slightly better, 0.0 samples deterministically
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

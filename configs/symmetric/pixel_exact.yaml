@@ -1,0 +1,57 @@
+# Symmetric image generation — PIXEL SPACE.
+#
+# The reference backend (exact), which runs on any GPU. configs/symmetric/pixel_exact_flash_attn.yaml
+# is the same file with the fused-attention backend; see "Making it fast" in the README for when
+# that pays off.
+#
+# For what a knob means, start at SymmetricAppConfig (efficient_sid/config.py):
+# it declares the top-level knobs and names the class behind each group.
+seed: 0
+num_samples: 1
+
+# Input and output
+image_path: ???
+final_output_path: null
+preview_long_side: null
+input_resize_to: null
+output_size: null
+
+# Symmetric-specific
+symmetry:
+  axis: "horizontal"     # "horizontal" or "vertical"
+  mirror_source: "left"  # "left"/"right" for horizontal, "top"/"bottom" for vertical
+
+# Latent-space acceleration -- disabled here. Do not just flip it on: patch_size and num_scales
+# below are tuned for pixel space. From ~512px up, use configs/symmetric/latent_exact.yaml instead.
+latent:
+  enabled: false
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: auto          # or an integer to pick the depth yourself
+  min_short_side: 24        # the coarsest scale's short side; 1.6x patch_size
+
+image_denoiser:
+  patch_size: 15
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "exact"
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 25    # quality/speed trade-off; 10-50 all give reasonable results, cost scales with steps
+  sigma_min: 1e-4
+  eta: 1.0         # try anywhere in 0.0-1.0; 1.0 is slightly better, 0.0 samples deterministically
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "efficient-sid"
+version = "0.1.0"
+description = "Efficient single-image diffusion: a closed-form patch denoiser as the single-image prior"
+readme = "README.md"
+# Floors below are what the code actually needs, which is looser than what we pin for development:
+#   torch >= 2.3   -- efficient_sid/closed_form_denoiser.py imports torch.nn.attention.sdpa_kernel,
+#                     which does not exist before 2.3.
+#   python >= 3.9  -- the code runs on 3.9; environment.yml pins 3.10 only because newer
+#                     PyTorch (for Blackwell GPUs) requires it, not because of anything here.
+# The stack we develop and test against is pinned in environment.yml (Python 3.10, PyTorch 2.8).
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+dependencies = [
+    "torch>=2.3",
+    "numpy",
+    "pillow",
+    "pyyaml",
+    "omegaconf",
+]
+
+[project.optional-dependencies]
+# Approximate nearest-neighbour denoiser (image_denoiser.patch_denoiser.type:
+# "ann" / "ann_flash_attn").
+# NOTE: faiss-gpu is not reliably pip-installable -- use conda (see environment.yml).
+ann = ["faiss-gpu"]
+# Latent-space acceleration (latent.enabled: true) -- FLUX VAE via diffusers.
+latent = ["diffusers>=0.30", "transformers", "accelerate"]
+# CLIP-guided text-driven style transfer (efficient_sid/applications/text_style.py).
+text = ["clip-anytorch", "torchvision"]
+
+[project.urls]
+Homepage = "https://github.com/haojunqiu/efficient-SID-code"
+
+[tool.setuptools.packages.find]
+# Installs efficient_sid and its subpackages (incl. efficient_sid.applications). The CLI scripts
+# (scripts/) stay repo-only -- run them from a clone. The applications are importable as
+# efficient_sid.applications.<name>.
+include = ["efficient_sid*"]

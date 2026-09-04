@@ -1,0 +1,54 @@
+# Unconditional generation — PIXEL SPACE, approximate k-NN backend (FAISS).
+#
+# Same as pixel_exact.yaml except image_denoiser.patch_denoiser.type: "ann" and the ANN block (k, index_type, nlist, nprobe, pq_m).
+# O(N^1.5) against exact's O(N^2); the one-time index build amortizes over many samples
+# from one input and can make it slower than exact on a small image. Requires faiss-gpu.
+seed: 10
+num_samples: 1
+
+# Input and output
+image_path: ???          # required: path to input image
+final_output_path: null   # optional: where to save result
+preview_long_side: null
+input_resize_to: null     # e.g. "(256, 256)" or null
+output_size: null
+
+# Latent-space acceleration -- disabled here. Do not just flip it on: patch_size and num_scales
+# below are tuned for pixel space. From ~512px up, use configs/uncond/latent_ann.yaml instead.
+latent:
+  enabled: false
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: auto          # or an integer to pick the depth yourself
+  min_short_side: 24        # the coarsest scale's short side; 1.6x patch_size
+
+image_denoiser:
+  patch_size: 15
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "ann"                # approximate (FAISS k-NN); big speedup on large patch datasets. Needs faiss-gpu.
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1
+    k: 5
+    index_type: "ivf"
+    nlist: null
+    nprobe: 2
+    pq_m: 16                # only used when index_type is "ivfpq"
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 10
+  sigma_min: 1e-4
+  eta: 0.0
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

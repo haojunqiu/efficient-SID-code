@@ -1,0 +1,54 @@
+# Retargeting — PIXEL SPACE, approximate k-NN backend (FAISS).
+#
+# Same as pixel_exact.yaml except image_denoiser.patch_denoiser.type: "ann" and the ANN block (k, index_type, nlist, nprobe, pq_m).
+# O(N^1.5) against exact's O(N^2); worth it on larger targets, say over 50k output pixels,
+# or where the one-time index build is reused across many samples. Requires faiss-gpu.
+seed: 0
+num_samples: 1
+
+# Input and output
+image_path: ???
+final_output_path: null
+preview_long_side: null
+input_resize_to: null
+output_size: null   # required: "(H,W)" target resolution
+
+# Latent-space acceleration -- disabled here, and retargeting has no tuned latent preset. To
+# enable it, try 7 or smaller for patch_size and min_short_side; num_scales is auto and follows.
+latent:
+  enabled: false
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: auto          # or an integer to pick the depth yourself
+  min_short_side: 15        # = patch_size: the short side the fixed coarsest scale lands on
+
+image_denoiser:
+  patch_size: 15
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "ann"    # <-- the only difference from configs/retarget/pixel_exact_flash_attn.yaml
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1           # increase to 4-8 for large targets (>250px short side at 2x width)
+    k: 5
+    index_type: "ivf"
+    nlist: null
+    nprobe: 2                 # lists probed per query; raise it if a small dataset returns fewer than k
+    pq_m: 16                  # only used when index_type is "ivfpq"
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 25             # quality/speed trade-off; 10-50 all work, and 10 looks near-identical here
+  sigma_min: 1e-4
+  eta: 1.0                  # try anywhere in 0.0-1.0; 1.0 is slightly better, especially for wider targets
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

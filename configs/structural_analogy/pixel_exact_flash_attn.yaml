@@ -1,0 +1,66 @@
+# Structural analogy (image-based style transfer) — PIXEL SPACE, fused-attention backend.
+#
+# Same as pixel_exact.yaml except image_denoiser.patch_denoiser.type: "exact_flash_attn".
+# At patch_size 11 the patch vector is d = 11*11*3 = 363, where the fused backend was about
+# 2x faster than exact on every GPU we measured. Needs an Ampere or newer GPU.
+seed: 1023
+num_samples: 1
+
+# Input and output
+style_image_path: ???
+structure_image_path: ???
+final_output_path: null
+preview_long_side: null
+
+# Structural-analogy specific
+output_short_side: null   # short side (px) the output is generated at; the output's aspect ratio is
+                          # always the *structure*'s. Both style and structure are resized so their
+                          # short side == this value (each keeping its own aspect), so a patch covers
+                          # the same image fraction of each -> texture transfers at a matched scale.
+                          # null = the *style*'s short side, so its texture keeps its native scale
+                          # and the structure is resized to match. The output resolution is
+                          # therefore derived, not the structure's native size. This sets the
+                          # finest short side; min_short_side floors the coarsest, a different end.
+noise_level: 0.5          # how far to invert the structure image: how much of the noisy image
+                          # is noise, from 0 to 1, and exactly sigma under flow_linear. Lower
+                          # stays closer to the structure; 0.2 to 1.0 is the useful range.
+
+# Latent-space acceleration -- disabled here. Do not just flip it on: patch_size and num_scales
+# below are tuned for pixel space. From ~512px up, use
+# configs/structural_analogy/latent_exact.yaml instead.
+latent:
+  enabled: false
+  vae_dtype: "bfloat16"
+
+pyramid:
+  relative_scale: 0.5
+  num_scales: 3
+  min_short_side: null
+
+image_denoiser:
+  patch_size: 11
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "exact_flash_attn"
+    bottleneck_dtype: "bfloat16"
+    query_chunks: 1
+
+scheduler:
+  type: "flow_linear"
+  num_steps: [10, 10, 50]   # per-scale, ordered finest -> coarsest (so this list assumes
+                            # num_scales=3). The coarsest scale, where the style transfer happens,
+                            # gets 50 steps; the two full-resolution finer scales only refine and
+                            # blend, so ~10 suffices -- a large speedup at no visible quality cost.
+                            # If you override num_scales, pass a matching-length list or a scalar.
+  sigma_min: 1e-2   # not the usual 1e-4: a stronger warm-up step for inversion
+  eta: 0.0              # deterministic
+
+precision:
+  dtype: "bfloat16"
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null

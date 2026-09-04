@@ -1,0 +1,67 @@
+# Text-driven style transfer (CLIP-guided) — PIXEL SPACE, fused-attention backend.
+#
+# Same as pixel_exact.yaml except image_denoiser.patch_denoiser.type: "exact_flash_attn".
+# Same computation without the N×N score matrix, for larger content images; this application
+# runs in float32, where the fused backend's speed gain is small. Needs an Ampere or newer GPU.
+seed: 10
+num_samples: 1
+
+# Input and output
+image_path: ???
+final_output_path: null
+preview_long_side: null
+input_resize_to: null     # e.g. "(512, 512)" or null
+
+# Text-style specific
+text: "Van Gogh style"
+# Prompt ideas to try on photographic inputs: "Van Gogh style", "Picasso style", "Monet style",
+# "Cubism style", "Ukiyo-e woodblock print", "watercolor painting", "pop art, Andy Warhol style",
+# "pointillism style", "stained glass", "The Great Wave off Kanagawa, Hokusai style", "charcoal
+# sketch", "Art Nouveau, Alphonse Mucha style", "psychedelic fractal art", "mosaic tiles",
+# "Chinese ink wash painting (shan shui)", "Salvador Dali surrealism", "cyberpunk neon".
+noise_level: 0.3          # how far to invert the content image: how much of the noisy image
+                          # is noise, from 0 to 1, and exactly sigma under flow_linear.
+                          # Lower stays closer to the content.
+# CLIP model (Text2LIVE augmented extractor) -- what produces the gradient
+clip_extractor:
+  model_name: "ViT-B/32"
+  n_aug: 16
+  affine_transform_fill: true
+
+# ...and how that gradient is applied each step
+clip_guidance:
+  strength: 1.0     # gamma; time-scaled per step by sigmas[t]/sigmas[t']
+  llambda: 0.1      # momentum weight on the new clean estimate vs the previous step's
+  fill_factor: 0.5  # f: fraction of pixels that receive guidance each step
+  iters: 1          # guidance refinements applied per diffusion step
+
+# Denoiser
+# No pyramid block: this application is single-scale.
+image_denoiser:
+  patch_size: 7
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "exact_flash_attn"
+                     # ~3.5x faster end-to-end here (inversion ~15x, the guided loop ~2.5x) with
+                     # no visible quality loss. pixel_exact_flash_attn.yaml: same math, less memory.
+    bottleneck_dtype: "float32"   # <-- float32, to match precision.dtype above
+    query_chunks: 1
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 200            # many steps because guidance is applied at each one
+  sigma_min: 1e-4           # smallest sigma the denoiser is evaluated at
+  eta: 0.0
+
+# Precision -- keep both of these at float32. This is the only application that takes a gradient
+# (autograd through CLIP); the others only average, which damps rounding error. At bfloat16 the
+# results are visibly worse, not merely noisier.
+precision:
+  dtype: "float32"    # <-- float32: the only app that backpropagates (the CLIP guidance gradient)
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null  # <-- here: the inverted noise and each step's result

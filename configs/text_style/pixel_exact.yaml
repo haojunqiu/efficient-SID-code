@@ -1,0 +1,80 @@
+# Text-driven style transfer (CLIP-guided) — PIXEL SPACE.
+#
+# Restyle a single image toward a text prompt; there is no style image. The content image is
+# inverted to noise_level and reconstructed with its own patch denoiser, with CLIP guidance
+# applied at every step.
+#
+# KEY KNOBS (useful ranges):
+#   clip_guidance.strength     gamma, the guidance step size    0.1 .. 1.0 tested here, not a cap
+#   clip_guidance.fill_factor  f, fraction of pixels guided per step    0.1 .. 1.0
+#   clip_guidance.llambda      weight on the new estimate; lower keeps more momentum   0 .. 1
+#   noise_level                how far to invert the content image      0 .. 1
+#
+# No latent block: CLIP guidance would have to backpropagate through the VAE decoder. For
+# larger content images use pixel_exact_flash_attn.yaml or pixel_ann.yaml, this file with the
+# backend switched; the README's Quickstart uses pixel_ann.yaml, the fastest here.
+#
+# For what a knob means, start at TextStyleAppConfig (efficient_sid/config.py):
+# it declares the top-level knobs and names the class behind each group.
+seed: 10
+num_samples: 1
+
+# Input and output
+image_path: ???
+final_output_path: null
+preview_long_side: null
+input_resize_to: null     # e.g. "(512, 512)" or null
+
+# Text-style specific
+text: "Van Gogh style"
+# Prompt ideas to try on photographic inputs: "Van Gogh style", "Picasso style", "Monet style",
+# "Cubism style", "Ukiyo-e woodblock print", "watercolor painting", "pop art, Andy Warhol style",
+# "pointillism style", "stained glass", "The Great Wave off Kanagawa, Hokusai style", "charcoal
+# sketch", "Art Nouveau, Alphonse Mucha style", "psychedelic fractal art", "mosaic tiles",
+# "Chinese ink wash painting (shan shui)", "Salvador Dali surrealism", "cyberpunk neon".
+noise_level: 0.3          # how far to invert the content image: how much of the noisy image
+                          # is noise, from 0 to 1, and exactly sigma under flow_linear.
+                          # Lower stays closer to the content.
+# CLIP model (Text2LIVE augmented extractor) -- what produces the gradient
+clip_extractor:
+  model_name: "ViT-B/32"
+  n_aug: 16
+  affine_transform_fill: true
+
+# ...and how that gradient is applied each step
+clip_guidance:
+  strength: 1.0     # gamma; time-scaled per step by sigmas[t]/sigmas[t']
+  llambda: 0.1      # momentum weight on the new clean estimate vs the previous step's
+  fill_factor: 0.5  # f: fraction of pixels that receive guidance each step
+  iters: 1          # guidance refinements applied per diffusion step
+
+# Denoiser
+# No pyramid block: this application is single-scale.
+image_denoiser:
+  patch_size: 7
+  dataset_stride: 1
+  query_stride: 1
+  fold_rho: 0.2
+  patch_denoiser:
+    type: "exact"    # the reference, runs on any GPU. pixel_ann.yaml is this file with "ann":
+                     # ~3.5x faster end-to-end here (inversion ~15x, the guided loop ~2.5x) with
+                     # no visible quality loss. pixel_exact_flash_attn.yaml: same math, less memory.
+    bottleneck_dtype: "float32"   # <-- float32, to match precision.dtype above
+    query_chunks: 1
+
+scheduler:
+  type: "flow_linear"
+  num_steps: 200            # many steps because guidance is applied at each one
+  sigma_min: 1e-4           # smallest sigma the denoiser is evaluated at
+  eta: 0.0
+
+# Precision -- keep both of these at float32. This is the only application that takes a gradient
+# (autograd through CLIP); the others only average, which damps rounding error. At bfloat16 the
+# results are visibly worse, not merely noisier.
+precision:
+  dtype: "float32"    # <-- float32: the only app that backpropagates (the CLIP guidance gradient)
+  matmul: "highest"
+
+diagnostics:              # neither changes the result
+  report_timing: true
+  intermediate_output_dir: null  # <-- here: the inverted noise and each step's result
